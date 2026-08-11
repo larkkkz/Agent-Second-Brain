@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# Editors
+.vscode/
+.idea/
+
+# Secrets / credentials — never commit these
+.env
+.env.*
+*.pem
+*.key
+*credentials*.json
+*token*.json
+secrets.*
+
+# A local vault accidentally created inside the repo
+/SecondBrain/
