@@ -24,8 +24,32 @@ human-readable memory:
 
 ## Setup
 
+### Option A — one command, no cloning (recommended)
+
+Requires [`uv`](https://docs.astral.sh/uv/) (`winget install astral-sh.uv` / `brew install uv` / see their docs).
+Add this to your MCP client's config — no `git clone`, no `pip install`, `uv` fetches and runs it straight
+from GitHub in an isolated environment:
+
+```json
+{
+  "mcpServers": {
+    "second-brain": {
+      "type": "stdio",
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/larkkkz/Agent-Second-Brain", "second-brain-mcp"],
+      "env": { "SECOND_BRAIN_VAULT": "C:\\Users\\you\\SecondBrain" }
+    }
+  }
+}
+```
+
+If `SECOND_BRAIN_VAULT` is omitted, it defaults to `~/SecondBrain`. The vault folder is created and seeded
+automatically the first time the server runs — nothing to set up by hand.
+
+### Option B — clone and run manually
+
 1. **Install Python 3.10+** if you don't have it.
-2. **Install dependencies:**
+2. Clone the repo, then install dependencies:
    ```
    pip install -r requirements.txt
    ```
@@ -37,27 +61,28 @@ human-readable memory:
    # macOS/Linux
    export SECOND_BRAIN_VAULT=~/SecondBrain
    ```
-   If unset, it defaults to `~/SecondBrain`. The vault folder is created and seeded automatically on first run.
-4. **Register the server with your MCP client.** For Claude Code, add to your MCP config
-   (project-level `.mcp.json`, or user-level via `claude mcp add`):
+4. **Register the server with your MCP client:**
    ```json
    {
      "mcpServers": {
        "second-brain": {
          "type": "stdio",
          "command": "python",
-         "args": ["/absolute/path/to/second-brain-mcp/server.py"],
+         "args": ["/absolute/path/to/second-brain-mcp/second_brain_mcp/server.py"],
          "env": { "SECOND_BRAIN_VAULT": "C:\\Users\\you\\SecondBrain" }
        }
      }
    }
    ```
-   Other MCP clients (Claude Desktop, Cursor, etc.) use a similar `mcpServers` config shape — check your
-   client's docs for where it lives.
-5. Restart your MCP client so it picks up the new server.
-6. (Optional, Claude Code only) Copy `skills/second-brain/SKILL.md` into `~/.claude/skills/second-brain/`
-   so the agent knows *when* to use the tools (install on request, log proactively, etc.) without you
-   having to explain it each session.
+
+### After either option
+
+- Other MCP clients (Claude Desktop, Cursor, etc.) use a similar `mcpServers` config shape — check your
+  client's docs for where it lives.
+- Restart your MCP client so it picks up the new server.
+- (Optional, Claude Code only) Copy `skills/second-brain/SKILL.md` into `~/.claude/skills/second-brain/`
+  so the agent knows *when* to use the tools (install on request, log proactively, etc.) without you
+  having to explain it each session.
 
 ## Tools
 

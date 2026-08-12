@@ -442,5 +442,10 @@ def search_all(query: str, project_name: str = "", limit: int = 20) -> list[dict
 
 _ensure_vault()
 
-if __name__ == "__main__":
+
+def main() -> None:
     mcp.run()
+
+
+if __name__ == "__main__":
+    main()
