@@ -24,11 +24,32 @@ human-readable memory:
 
 ## Setup
 
-### Option A — one command, no cloning (recommended)
+### Option A — one-paste installer (recommended)
+
+Installs `uv` if needed, and registers the server in your Claude Code config automatically:
+
+```bash
+# macOS/Linux
+bash <(curl -fsSL https://raw.githubusercontent.com/larkkkz/Agent-Second-Brain/main/install.sh)
+```
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/larkkkz/Agent-Second-Brain/main/install.ps1 | iex
+```
+
+Vault defaults to `~/SecondBrain` — override with `SECOND_BRAIN_VAULT=/your/path` before running, or pass
+it as a second argument (`bash <(curl ...) ~/.claude.json /your/vault/path`).
+
+After it finishes: restart Claude Code, then run `/mcp` and approve the `second-brain` server the first
+time it's used — that one approval step is a Claude Code security gate that applies to any MCP server, not
+something an installer can (or should) skip.
+
+### Option B — manual config edit, no cloning
 
 Requires [`uv`](https://docs.astral.sh/uv/) (`winget install astral-sh.uv` / `brew install uv` / see their docs).
-Add this to your MCP client's config — no `git clone`, no `pip install`, `uv` fetches and runs it straight
-from GitHub in an isolated environment:
+Add this to your MCP client's config yourself — no `git clone`, no `pip install`, `uv` fetches and runs it
+straight from GitHub in an isolated environment:
 
 ```json
 {
@@ -46,7 +67,7 @@ from GitHub in an isolated environment:
 If `SECOND_BRAIN_VAULT` is omitted, it defaults to `~/SecondBrain`. The vault folder is created and seeded
 automatically the first time the server runs — nothing to set up by hand.
 
-### Option B — clone and run manually
+### Option C — clone and run manually
 
 1. **Install Python 3.10+** if you don't have it.
 2. Clone the repo, then install dependencies:
