@@ -6,7 +6,7 @@
 
 ## {{YYYY-MM-DD}} — {{Pattern title}}
 
-**Seen in:** [[Projects/ProjectA/Bugs-and-Fixes|ProjectA]], [[Projects/ProjectB/Bugs-and-Fixes|ProjectB]]
+**Seen in:** ProjectA, ProjectB
 
 **Pattern:** What keeps happening.
 
