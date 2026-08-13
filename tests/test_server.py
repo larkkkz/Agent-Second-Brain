@@ -150,6 +150,59 @@ def test_search_all_no_match_returns_empty(server):
     assert server.search_all("nonexistentterm12345") == []
 
 
+def test_recent_activity_includes_todays_entry(server):
+    server.install_project("Alpha")
+    server.log_decision("Alpha", "Use SQLite", "context", "decision", "why")
+
+    results = server.recent_activity(days=7)
+    assert any(r["project"] == "Alpha" and "Use SQLite" in r["title"] for r in results)
+
+
+def test_recent_activity_excludes_entries_outside_window(server):
+    import datetime
+
+    server.install_project("Alpha")
+    server.log_decision("Alpha", "Recent one", "context", "decision", "why")
+
+    old_date = (datetime.date.today() - datetime.timedelta(days=30)).isoformat()
+    path = server._file("Alpha", "Decisions")
+    text = server._read(path)
+    text = text.rstrip("\n") + f"\n\n## {old_date} — Ancient decision\n\n**Context:** old\n\n---\n"
+    server._write(path, text)
+
+    results = server.recent_activity(days=7)
+    titles = [r["title"] for r in results]
+    assert "Recent one" in titles
+    assert "Ancient decision" not in titles
+
+
+def test_recent_activity_scoped_to_project(server):
+    server.install_project("Alpha")
+    server.install_project("Beta")
+    server.log_decision("Alpha", "Alpha decision", "context", "decision", "why")
+    server.log_decision("Beta", "Beta decision", "context", "decision", "why")
+
+    results = server.recent_activity(days=7, project_name="Alpha")
+    assert all(r["project"] == "Alpha" for r in results)
+
+
+def test_recent_activity_sorted_newest_first(server):
+    import datetime
+
+    server.install_project("Alpha")
+    server.log_decision("Alpha", "Today decision", "context", "decision", "why")
+
+    yesterday = (datetime.date.today() - datetime.timedelta(days=1)).isoformat()
+    path = server._file("Alpha", "Progress")
+    text = server._read(path)
+    text = text.rstrip("\n") + f"\n\n## {yesterday}\n\n**Done:**\n- something\n\n---\n"
+    server._write(path, text)
+
+    results = server.recent_activity(days=7)
+    dates = [r["date"] for r in results]
+    assert dates == sorted(dates, reverse=True)
+
+
 @pytest.mark.parametrize("bad_name", ["../escape", "a/b", "a\\b", "..", "   ", ""])
 def test_validate_name_rejects_path_traversal_and_invalid(server, bad_name):
     with pytest.raises(ValueError):

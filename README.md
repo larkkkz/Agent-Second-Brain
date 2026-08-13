@@ -122,6 +122,7 @@ automatically the first time the server runs — nothing to set up by hand.
 | `set_open_blockers` / `set_unresolved_bugs` | Overwrite the live blocker/bug list in Router |
 | `add_pattern` | Log a theme that's recurred across more than one project |
 | `search_all` | Keyword search across every project's logs + Patterns |
+| `recent_activity` | Digest of what was logged in the last N days, across projects or one |
 
 ## Vault layout
 

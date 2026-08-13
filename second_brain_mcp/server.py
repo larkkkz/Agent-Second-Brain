@@ -17,7 +17,7 @@ legible, since every project would otherwise have identically-named nodes.
 import os
 import re
 import shutil
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -453,6 +453,56 @@ def search_all(query: str, project_name: str = "", limit: int = 20) -> list[dict
         scan_file(PATTERNS_FILE, "(vault-wide)", "Patterns")
 
     return results[:limit]
+
+
+@mcp.tool()
+def recent_activity(days: int = 7, project_name: str = "") -> list[dict]:
+    """Digest of what happened recently across projects: decisions, progress, bugs, and lessons
+    logged in the last `days` days, newest first. Pass project_name to scope to one project
+    instead of the whole vault. Use this for a "what happened recently" summary instead of
+    reading each project's Router individually.
+    """
+    _ensure_vault()
+    cutoff = date.today() - timedelta(days=days)
+    results = []
+
+    def scan(path: Path, project_label: str, journal_label: str):
+        if not path.exists():
+            return
+        text = _read(path)
+        entries = re.split(r"(?=^## )", text, flags=re.M)
+        for entry in entries:
+            if not entry.startswith("## "):
+                continue
+            m = re.match(r"## (\d{4}-\d{2}-\d{2})(?:\s*—\s*(.*))?", entry.splitlines()[0])
+            if not m:
+                continue
+            try:
+                entry_date = date.fromisoformat(m.group(1))
+            except ValueError:
+                continue
+            if entry_date < cutoff:
+                continue
+            snippet = entry.strip()
+            if len(snippet) > 400:
+                snippet = snippet[:400].rsplit(" ", 1)[0] + "…"
+            results.append(
+                {
+                    "project": project_label,
+                    "journal": journal_label,
+                    "date": entry_date.isoformat(),
+                    "title": m.group(2) or "",
+                    "snippet": snippet,
+                }
+            )
+
+    names = [_validate_name(project_name)] if project_name else list_projects()
+    for name in names:
+        for journal in JOURNALS:
+            scan(_file(name, journal), name, journal)
+
+    results.sort(key=lambda r: r["date"], reverse=True)
+    return results
 
 
 _ensure_vault()
