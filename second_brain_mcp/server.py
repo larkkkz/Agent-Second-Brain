@@ -8,6 +8,10 @@ no skill or plugin required, just the MCP connection.
 Vault location: set the SECOND_BRAIN_VAULT environment variable to an
 absolute path. Defaults to ~/SecondBrain if unset. The vault is created and
 seeded automatically on first run.
+
+Per-project files are named "<Project Name> - <Stem>.md" (e.g. "PmsPoC -
+Router.md") rather than bare "Router.md" — this keeps Obsidian's graph view
+legible, since every project would otherwise have identically-named nodes.
 """
 
 import os
@@ -38,6 +42,7 @@ LIVING_FILES = {
     "Router": "Router-Template.md",
     "Current-State": "Current-State-Template.md",
 }
+ALL_STEMS = [*LIVING_FILES, *JOURNALS]
 
 SECOND_BRAIN_SECTION = """## Second Brain Logging
 
@@ -85,6 +90,16 @@ def _project_dir(project_name: str) -> Path:
     return PROJECTS_DIR / _validate_name(project_name)
 
 
+def _file(project_name: str, stem: str) -> Path:
+    """Path for a project's file, using the project-prefixed naming scheme."""
+    return _project_dir(project_name) / f"{project_name} - {stem}.md"
+
+
+def _link(project_name: str, stem: str, display: str = None) -> str:
+    """Wikilink to a project's file, aliased so the visible text stays just the stem."""
+    return f"[[{project_name} - {stem}|{display or stem}]]"
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
@@ -105,6 +120,8 @@ def _render_template(template_file: str, project_name: str) -> str:
     text = text.replace("{{Project Name}}", project_name)
     if template_file == "Current-State-Template.md":
         text = text.replace("{{YYYY-MM-DD}}", _today())
+    for stem in ALL_STEMS:
+        text = text.replace(f"[[{stem}]]", _link(project_name, stem))
     return text
 
 
@@ -159,10 +176,9 @@ def _latest_headers(path: Path, limit: int = 5):
 
 
 def _refresh_router_from_journal(project_name: str, journal: str, router_section: str) -> None:
-    pdir = _project_dir(project_name)
-    headers = _latest_headers(pdir / f"{journal}.md", limit=5)
-    links = [f"[[{journal}#{h}|{h}]]" for h in headers]
-    router_path = pdir / "Router.md"
+    headers = _latest_headers(_file(project_name, journal), limit=5)
+    links = [f"[[{project_name} - {journal}#{h}|{h}]]" for h in headers]
+    router_path = _file(project_name, "Router")
     text = _read(router_path)
     text = _set_block_section(text, router_section, links)
     _write(router_path, text)
@@ -192,7 +208,7 @@ def install_project(project_name: str, project_root_path: str = "") -> dict:
     created, existing = [], []
     all_files = {**LIVING_FILES, **JOURNALS}
     for stem, template_file in all_files.items():
-        target = pdir / f"{stem}.md"
+        target = _file(project_name, stem)
         if target.exists():
             existing.append(target.name)
         else:
@@ -200,7 +216,7 @@ def install_project(project_name: str, project_root_path: str = "") -> dict:
             created.append(target.name)
 
     home_text = _read(HOME_FILE)
-    link_line = f"- [[Projects/{project_name}/Router|{project_name}]]"
+    link_line = f"- [[Projects/{project_name}/{project_name} - Router|{project_name}]]"
     home_updated = False
     if link_line not in home_text:
         m = re.search(r"(## Projects\n)(.*?)(\n## )", home_text, re.S)
@@ -245,15 +261,15 @@ def install_project(project_name: str, project_root_path: str = "") -> dict:
 @mcp.tool()
 def read_router(project_name: str) -> str:
     """Read a project's Router.md — the quick-orientation briefing. Read this first each session."""
-    pdir = _require_installed(project_name)
-    return _read(pdir / "Router.md")
+    _require_installed(project_name)
+    return _read(_file(project_name, "Router"))
 
 
 @mcp.tool()
 def read_current_state(project_name: str) -> str:
     """Read a project's Current-State.md — the living architecture/status snapshot."""
-    pdir = _require_installed(project_name)
-    return _read(pdir / "Current-State.md")
+    _require_installed(project_name)
+    return _read(_file(project_name, "Current-State"))
 
 
 @mcp.tool()
@@ -263,8 +279,8 @@ def read_journal(project_name: str, journal: str) -> str:
     """
     if journal not in JOURNALS:
         raise ValueError(f"journal must be one of {list(JOURNALS)}")
-    pdir = _require_installed(project_name)
-    return _read(pdir / f"{journal}.md")
+    _require_installed(project_name)
+    return _read(_file(project_name, journal))
 
 
 @mcp.tool()
@@ -272,16 +288,16 @@ def log_decision(
     project_name: str, title: str, context: str, decision: str, why: str, alternatives: str = ""
 ) -> str:
     """Append a dated decision entry to a project's Decisions.md and refresh its Router."""
-    pdir = _require_installed(project_name)
+    _require_installed(project_name)
     entry = (
         f"## {_today()} — {title}\n\n"
         f"**Context:** {context}\n\n"
         f"**Decision:** {decision}\n\n"
         f"**Why:** {why}\n\n"
         f"**Alternatives considered:** {alternatives or '—'}\n\n"
-        f"**Related:** [[Progress]] · [[Bugs-and-Fixes]] · #decision"
+        f"**Related:** {_link(project_name, 'Progress')} · {_link(project_name, 'Bugs-and-Fixes')} · #decision"
     )
-    _append_entry(pdir / "Decisions.md", entry)
+    _append_entry(_file(project_name, "Decisions"), entry)
     _refresh_router_from_journal(project_name, "Decisions", "Recent decisions")
     return f"Logged decision '{title}' for {project_name}."
 
@@ -294,15 +310,15 @@ def log_progress(
     next_steps: Optional[list[str]] = None,
 ) -> str:
     """Append a dated progress entry to a project's Progress.md and refresh its Router."""
-    pdir = _require_installed(project_name)
+    _require_installed(project_name)
     entry = (
         f"## {_today()}\n\n"
         f"**Done:**\n{_bullets(done)}\n\n"
         f"**Blocked:**\n{_bullets(blocked)}\n\n"
         f"**Next:**\n{_bullets(next_steps)}\n\n"
-        f"**Related:** [[Decisions]] · [[Bugs-and-Fixes]] · #progress"
+        f"**Related:** {_link(project_name, 'Decisions')} · {_link(project_name, 'Bugs-and-Fixes')} · #progress"
     )
-    _append_entry(pdir / "Progress.md", entry)
+    _append_entry(_file(project_name, "Progress"), entry)
     _refresh_router_from_journal(project_name, "Progress", "Recent progress")
     return f"Logged progress for {project_name}."
 
@@ -310,31 +326,31 @@ def log_progress(
 @mcp.tool()
 def log_bug(project_name: str, title: str, symptom: str, root_cause: str, fix: str, prevention: str = "") -> str:
     """Append a dated bug+fix entry to a project's Bugs-and-Fixes.md."""
-    pdir = _require_installed(project_name)
+    _require_installed(project_name)
     entry = (
         f"## {_today()} — {title}\n\n"
         f"**Symptom:** {symptom}\n\n"
         f"**Root cause:** {root_cause}\n\n"
         f"**Fix:** {fix}\n\n"
         f"**Prevention:** {prevention or '—'}\n\n"
-        f"**Related:** [[Decisions]] · [[Lessons-Learned]] · #bug"
+        f"**Related:** {_link(project_name, 'Decisions')} · {_link(project_name, 'Lessons-Learned')} · #bug"
     )
-    _append_entry(pdir / "Bugs-and-Fixes.md", entry)
+    _append_entry(_file(project_name, "Bugs-and-Fixes"), entry)
     return f"Logged bug '{title}' for {project_name}."
 
 
 @mcp.tool()
 def log_lesson(project_name: str, title: str, what_happened: str, lesson: str, apply_next_time: str) -> str:
     """Append a dated lesson-learned entry to a project's Lessons-Learned.md."""
-    pdir = _require_installed(project_name)
+    _require_installed(project_name)
     entry = (
         f"## {_today()} — {title}\n\n"
         f"**What happened:** {what_happened}\n\n"
         f"**Lesson:** {lesson}\n\n"
         f"**Apply next time:** {apply_next_time}\n\n"
-        f"**Related:** [[Bugs-and-Fixes]] · [[Decisions]] · #lesson"
+        f"**Related:** {_link(project_name, 'Bugs-and-Fixes')} · {_link(project_name, 'Decisions')} · #lesson"
     )
-    _append_entry(pdir / "Lessons-Learned.md", entry)
+    _append_entry(_file(project_name, "Lessons-Learned"), entry)
     return f"Logged lesson '{title}' for {project_name}."
 
 
@@ -349,8 +365,8 @@ def update_current_state(
     """Overwrite sections of a project's Current-State.md. Pass only the sections that changed;
     omitted sections (left as None) are unchanged. This file is living truth, not a log.
     """
-    pdir = _require_installed(project_name)
-    path = pdir / "Current-State.md"
+    _require_installed(project_name)
+    path = _file(project_name, "Current-State")
     text = _read(path)
     text = re.sub(r"\*\*Last updated:\*\* .*", f"**Last updated:** {_today()}", text)
     if architecture is not None:
@@ -368,8 +384,8 @@ def update_current_state(
 @mcp.tool()
 def set_open_blockers(project_name: str, blockers: list[str]) -> str:
     """Overwrite the 'Open blockers' list in a project's Router.md."""
-    pdir = _require_installed(project_name)
-    path = pdir / "Router.md"
+    _require_installed(project_name)
+    path = _file(project_name, "Router")
     _write(path, _set_block_section(_read(path), "Open blockers", blockers))
     return f"Updated open blockers for {project_name}."
 
@@ -377,8 +393,8 @@ def set_open_blockers(project_name: str, blockers: list[str]) -> str:
 @mcp.tool()
 def set_unresolved_bugs(project_name: str, bugs: list[str]) -> str:
     """Overwrite the 'Unresolved bugs' list in a project's Router.md."""
-    pdir = _require_installed(project_name)
-    path = pdir / "Router.md"
+    _require_installed(project_name)
+    path = _file(project_name, "Router")
     _write(path, _set_block_section(_read(path), "Unresolved bugs", bugs))
     return f"Updated unresolved bugs for {project_name}."
 
@@ -389,7 +405,7 @@ def add_pattern(title: str, seen_in: list[str], pattern: str, recommendation: st
     bug/decision/lesson theme has shown up in more than one project.
     """
     _ensure_vault()
-    seen_links = ", ".join(f"[[Projects/{p}/Bugs-and-Fixes|{p}]]" for p in seen_in)
+    seen_links = ", ".join(f"[[Projects/{p}/{p} - Bugs-and-Fixes|{p}]]" for p in seen_in)
     entry = (
         f"## {_today()} — {title}\n\n"
         f"**Seen in:** {seen_links}\n\n"
@@ -430,9 +446,8 @@ def search_all(query: str, project_name: str = "", limit: int = 20) -> list[dict
 
     names = [_validate_name(project_name)] if project_name else list_projects()
     for name in names:
-        pdir = PROJECTS_DIR / name
-        for file_label in [*LIVING_FILES, *JOURNALS]:
-            scan_file(pdir / f"{file_label}.md", name, file_label)
+        for stem in ALL_STEMS:
+            scan_file(_file(name, stem), name, stem)
 
     if not project_name:
         scan_file(PATTERNS_FILE, "(vault-wide)", "Patterns")
