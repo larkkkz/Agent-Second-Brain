@@ -1,0 +1,179 @@
+import importlib
+
+import pytest
+
+
+@pytest.fixture
+def server(tmp_path, monkeypatch):
+    """A fresh, isolated second_brain_mcp.server module pointed at a throwaway vault."""
+    monkeypatch.setenv("SECOND_BRAIN_VAULT", str(tmp_path))
+    import second_brain_mcp.server as mod
+
+    importlib.reload(mod)
+    return mod
+
+
+def test_install_project_creates_all_six_files(server):
+    result = server.install_project("Demo")
+    assert set(result["created_files"]) == {
+        "Demo - Router.md",
+        "Demo - Current-State.md",
+        "Demo - Decisions.md",
+        "Demo - Progress.md",
+        "Demo - Bugs-and-Fixes.md",
+        "Demo - Lessons-Learned.md",
+    }
+    assert result["existing_files"] == []
+    assert result["home_updated"] is True
+
+
+def test_install_project_does_not_overwrite_existing(server):
+    server.install_project("Demo")
+    router_path = server._file("Demo", "Router")
+    router_path.write_text("custom content", encoding="utf-8")
+
+    result = server.install_project("Demo")
+
+    assert "Demo - Router.md" in result["existing_files"]
+    assert router_path.read_text(encoding="utf-8") == "custom content"
+
+
+def test_install_project_links_home(server):
+    server.install_project("Demo")
+    home_text = server._read(server.HOME_FILE)
+    assert "[[Projects/Demo/Demo - Router|Demo]]" in home_text
+
+
+def test_set_block_section_keeps_blank_line_before_next_header(server):
+    text = "## Open blockers\n-\n\n## Unresolved bugs\n-\n"
+    new_text = server._set_block_section(text, "Open blockers", ["Waiting on review"])
+    lines = new_text.split("\n")
+    blocker_idx = lines.index("- Waiting on review")
+    assert lines[blocker_idx + 1] == ""
+    assert lines[blocker_idx + 2] == "## Unresolved bugs"
+
+
+def test_set_block_section_before_full_logs_marker(server):
+    text = "## Recent progress\n-\n\n**Full logs:** [[x]]"
+    new_text = server._set_block_section(text, "Recent progress", ["2026-01-01"])
+    assert "- 2026-01-01\n\n**Full logs:**" in new_text
+
+
+def test_log_decision_appends_and_refreshes_router(server):
+    server.install_project("Demo")
+    server.log_decision("Demo", "Use SQLite", "Needed local cache", "Use SQLite", "Simple")
+
+    decisions = server.read_journal("Demo", "Decisions")
+    assert "Use SQLite" in decisions
+    assert "[[Demo - Progress|Progress]]" in decisions
+
+    router = server.read_router("Demo")
+    assert "Demo - Decisions#" in router
+    assert "Use SQLite" in router
+
+
+def test_log_progress_appends_and_refreshes_router(server):
+    server.install_project("Demo")
+    server.log_progress("Demo", ["Did a thing"], ["Blocked on review"], ["Next thing"])
+
+    progress = server.read_journal("Demo", "Progress")
+    assert "Did a thing" in progress
+    assert "Blocked on review" in progress
+
+    router = server.read_router("Demo")
+    assert "Demo - Progress#" in router
+
+
+def test_log_bug_appends(server):
+    server.install_project("Demo")
+    server.log_bug("Demo", "Cache never expired", "Entries never evicted", "TTL never set", "Added TTL")
+    bugs = server.read_journal("Demo", "Bugs-and-Fixes")
+    assert "Cache never expired" in bugs
+    assert "[[Demo - Lessons-Learned|Lessons-Learned]]" in bugs
+
+
+def test_log_lesson_appends(server):
+    server.install_project("Demo")
+    server.log_lesson("Demo", "Test expiry", "Shipped without a test", "Needs explicit tests", "Add test")
+    lessons = server.read_journal("Demo", "Lessons-Learned")
+    assert "Test expiry" in lessons
+
+
+def test_update_current_state_overwrites_only_given_sections(server):
+    server.install_project("Demo")
+    server.update_current_state("Demo", architecture=["SQLite cache added"])
+    state = server.read_current_state("Demo")
+    assert "SQLite cache added" in state
+    assert "## Key components\n-" in state
+
+
+def test_set_open_blockers_and_unresolved_bugs(server):
+    server.install_project("Demo")
+    server.set_open_blockers("Demo", ["Waiting on DBA"])
+    server.set_unresolved_bugs("Demo", ["Slow report query"])
+    router = server.read_router("Demo")
+    assert "Waiting on DBA" in router
+    assert "Slow report query" in router
+
+
+def test_add_pattern_links_real_projects(server):
+    server.install_project("Alpha")
+    server.install_project("Beta")
+    server.add_pattern("Forgot TTL", ["Alpha", "Beta"], "TTL keeps getting forgotten", "Add to checklist")
+    patterns = server._read(server.PATTERNS_FILE)
+    assert "[[Projects/Alpha/Alpha - Bugs-and-Fixes|Alpha]]" in patterns
+    assert "[[Projects/Beta/Beta - Bugs-and-Fixes|Beta]]" in patterns
+
+
+def test_search_all_finds_match_across_projects(server):
+    server.install_project("Alpha")
+    server.install_project("Beta")
+    server.log_bug("Alpha", "Cache bug", "cache never expired", "no ttl", "added ttl")
+
+    results = server.search_all("cache")
+    assert any(r["project"] == "Alpha" for r in results)
+    assert not any(r["project"] == "Beta" for r in results)
+
+
+def test_search_all_scoped_to_project(server):
+    server.install_project("Alpha")
+    server.install_project("Beta")
+    server.log_bug("Alpha", "Cache bug", "cache never expired", "no ttl", "added ttl")
+    server.log_bug("Beta", "Cache bug too", "cache never expired here too", "no ttl", "added ttl")
+
+    results = server.search_all("cache", project_name="Alpha")
+    assert all(r["project"] == "Alpha" for r in results)
+
+
+def test_search_all_no_match_returns_empty(server):
+    server.install_project("Alpha")
+    assert server.search_all("nonexistentterm12345") == []
+
+
+@pytest.mark.parametrize("bad_name", ["../escape", "a/b", "a\\b", "..", "   ", ""])
+def test_validate_name_rejects_path_traversal_and_invalid(server, bad_name):
+    with pytest.raises(ValueError):
+        server._validate_name(bad_name)
+
+
+def test_require_installed_raises_for_unknown_project(server):
+    with pytest.raises(ValueError):
+        server.read_router("DoesNotExist")
+
+
+def test_render_template_prefixes_bare_links(server):
+    text = server._render_template("Router-Template.md", "Demo")
+    assert "[[Demo - Decisions|Decisions]]" in text
+    assert "[[Decisions]]" not in text
+
+
+def test_ensure_vault_seeds_home_and_patterns(server):
+    assert server.HOME_FILE.exists()
+    assert server.PATTERNS_FILE.exists()
+    assert "{{" in server._read(server.PATTERNS_FILE)
+
+
+def test_list_projects_empty_then_populated(server):
+    assert server.list_projects() == []
+    server.install_project("Demo")
+    assert server.list_projects() == ["Demo"]

@@ -9,6 +9,11 @@ dependencies = [
     "mcp==2.0.0",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
 [project.urls]
 Homepage = "https://github.com/larkkkz/Agent-Second-Brain"
 
