@@ -288,6 +288,46 @@ def archive_project(project_name: str) -> str:
 
 
 @mcp.tool()
+def list_archived_projects() -> list[str]:
+    """List all archived project names (see archive_project). Check this before calling
+    delete_archived_project to confirm the exact name of what you're about to delete.
+    """
+    _ensure_vault()
+    archive_dir = PROJECTS_DIR / ARCHIVE_DIRNAME
+    if not archive_dir.exists():
+        return []
+    return sorted(p.name for p in archive_dir.iterdir() if p.is_dir())
+
+
+@mcp.tool()
+def delete_archived_project(project_name: str, confirm_name: str) -> str:
+    """PERMANENTLY delete an archived project's data. This cannot be undone.
+
+    Only works on projects already archived via archive_project (Projects/_Archive/<name>) — a
+    live/active project must be archived first, as a deliberate two-step safety measure.
+
+    Before calling this: show the user the exact project name and warn that this is
+    irreversible, then ask them to type the project name themselves to confirm. Pass exactly
+    what the user typed as confirm_name — do not fill this in yourself or assume it matches
+    project_name. If confirm_name does not match exactly, nothing is deleted.
+    """
+    project_name = _validate_name(project_name)
+    archived_dir = PROJECTS_DIR / ARCHIVE_DIRNAME / project_name
+    if not archived_dir.exists():
+        raise ValueError(
+            f"'{project_name}' is not an archived project. Call archive_project first — "
+            "delete_archived_project only works on already-archived projects."
+        )
+    if confirm_name != project_name:
+        raise ValueError(
+            "confirm_name did not match project_name exactly. Nothing was deleted. Ask the "
+            "user to type the project name themselves to confirm, and pass exactly what they typed."
+        )
+    shutil.rmtree(archived_dir)
+    return f"Permanently deleted archived project '{project_name}'."
+
+
+@mcp.tool()
 def read_router(project_name: str) -> str:
     """Read a project's Router.md — the quick-orientation briefing. Read this first each session."""
     _require_installed(project_name)

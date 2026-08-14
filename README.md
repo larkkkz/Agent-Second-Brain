@@ -111,6 +111,8 @@ automatically the first time the server runs — nothing to set up by hand.
 |---|---|
 | `install_project` | Create a project's Router/Current-State/journals from templates; optionally wires up `CLAUDE.md` |
 | `archive_project` | Move a project to `Projects/_Archive/` and unlink it from Home.md — nothing is deleted |
+| `list_archived_projects` | List archived projects |
+| `delete_archived_project` | Permanently delete an already-archived project (requires typed name confirmation) |
 | `list_projects` | List active (non-archived) projects |
 | `read_router` | Read a project's quick-orientation briefing |
 | `read_current_state` | Read a project's living architecture/status snapshot |

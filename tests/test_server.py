@@ -282,3 +282,48 @@ def test_archived_project_excluded_from_search_and_activity(server):
 def test_project_name_cannot_be_reserved_archive_name(server):
     with pytest.raises(ValueError):
         server.install_project("_Archive")
+
+
+def test_list_archived_projects_empty_then_populated(server):
+    assert server.list_archived_projects() == []
+    server.install_project("Demo")
+    server.archive_project("Demo")
+    assert server.list_archived_projects() == ["Demo"]
+
+
+def test_delete_archived_project_removes_folder(server):
+    server.install_project("Demo")
+    server.archive_project("Demo")
+    archived = server.PROJECTS_DIR / server.ARCHIVE_DIRNAME / "Demo"
+    assert archived.exists()
+
+    result = server.delete_archived_project("Demo", confirm_name="Demo")
+
+    assert not archived.exists()
+    assert server.list_archived_projects() == []
+    assert "Permanently deleted" in result
+
+
+def test_delete_archived_project_requires_exact_confirm_match(server):
+    server.install_project("Demo")
+    server.archive_project("Demo")
+
+    with pytest.raises(ValueError):
+        server.delete_archived_project("Demo", confirm_name="demo")
+
+    with pytest.raises(ValueError):
+        server.delete_archived_project("Demo", confirm_name="Dem")
+
+    # nothing was deleted by the failed attempts
+    assert server.list_archived_projects() == ["Demo"]
+
+
+def test_delete_archived_project_raises_if_not_archived(server):
+    server.install_project("Demo")
+    with pytest.raises(ValueError):
+        server.delete_archived_project("Demo", confirm_name="Demo")
+
+
+def test_delete_archived_project_raises_if_unknown(server):
+    with pytest.raises(ValueError):
+        server.delete_archived_project("NeverExisted", confirm_name="NeverExisted")
