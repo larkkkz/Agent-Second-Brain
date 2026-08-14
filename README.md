@@ -110,7 +110,8 @@ automatically the first time the server runs — nothing to set up by hand.
 | Tool | Purpose |
 |---|---|
 | `install_project` | Create a project's Router/Current-State/journals from templates; optionally wires up `CLAUDE.md` |
-| `list_projects` | List installed projects |
+| `archive_project` | Move a project to `Projects/_Archive/` and unlink it from Home.md — nothing is deleted |
+| `list_projects` | List active (non-archived) projects |
 | `read_router` | Read a project's quick-orientation briefing |
 | `read_current_state` | Read a project's living architecture/status snapshot |
 | `read_journal` | Read a full journal (Decisions/Progress/Bugs-and-Fixes/Lessons-Learned) |

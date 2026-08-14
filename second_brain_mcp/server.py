@@ -31,6 +31,7 @@ VAULT_ROOT = Path(os.environ.get("SECOND_BRAIN_VAULT", str(Path.home() / "Second
 PROJECTS_DIR = VAULT_ROOT / "Projects"
 HOME_FILE = VAULT_ROOT / "Home.md"
 PATTERNS_FILE = VAULT_ROOT / "Patterns.md"
+ARCHIVE_DIRNAME = "_Archive"
 
 JOURNALS = {
     "Decisions": "Decision-Log-Template.md",
@@ -83,6 +84,8 @@ def _validate_name(name: str) -> str:
     name = name.strip()
     if not name or not re.match(r"^[A-Za-z0-9._ -]+$", name) or ".." in name:
         raise ValueError(f"Invalid project name: {name!r}")
+    if name == ARCHIVE_DIRNAME:
+        raise ValueError(f"'{name}' is a reserved name and can't be used as a project name.")
     return name
 
 
@@ -186,11 +189,13 @@ def _refresh_router_from_journal(project_name: str, journal: str, router_section
 
 @mcp.tool()
 def list_projects() -> list[str]:
-    """List all project names currently installed in the second-brain vault."""
+    """List all active (non-archived) project names in the second-brain vault."""
     _ensure_vault()
     if not PROJECTS_DIR.exists():
         return []
-    return sorted(p.name for p in PROJECTS_DIR.iterdir() if p.is_dir())
+    return sorted(
+        p.name for p in PROJECTS_DIR.iterdir() if p.is_dir() and p.name != ARCHIVE_DIRNAME
+    )
 
 
 @mcp.tool()
@@ -256,6 +261,30 @@ def install_project(project_name: str, project_root_path: str = "") -> dict:
         "home_updated": home_updated,
         "claude_md": claude_md_status,
     }
+
+
+@mcp.tool()
+def archive_project(project_name: str) -> str:
+    """Archive a project: moves its folder to Projects/_Archive/<name> and removes it from
+    Home.md's active project list. Nothing is deleted — all logged content is preserved, and
+    the project no longer shows up in list_projects/search_all/recent_activity. To restore it,
+    move the folder back out of Projects/_Archive/ and re-add its Home.md link by hand.
+    """
+    pdir = _require_installed(project_name)
+    archive_dir = PROJECTS_DIR / ARCHIVE_DIRNAME
+    archive_dir.mkdir(parents=True, exist_ok=True)
+    target = archive_dir / project_name
+    if target.exists():
+        raise ValueError(f"An archived project named '{project_name}' already exists at {target}")
+    shutil.move(str(pdir), str(target))
+
+    home_text = _read(HOME_FILE)
+    link_line = f"- [[Projects/{project_name}/{project_name} - Router|{project_name}]]\n"
+    if link_line in home_text:
+        home_text = home_text.replace(link_line, "")
+        _write(HOME_FILE, home_text)
+
+    return f"Archived '{project_name}' to Projects/{ARCHIVE_DIRNAME}/{project_name}."
 
 
 @mcp.tool()

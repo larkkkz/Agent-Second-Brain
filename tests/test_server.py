@@ -230,3 +230,55 @@ def test_list_projects_empty_then_populated(server):
     assert server.list_projects() == []
     server.install_project("Demo")
     assert server.list_projects() == ["Demo"]
+
+
+def test_archive_project_moves_folder_and_removes_from_list(server):
+    server.install_project("Demo")
+    pdir = server._project_dir("Demo")
+    assert pdir.exists()
+
+    result = server.archive_project("Demo")
+
+    assert not pdir.exists()
+    archived = server.PROJECTS_DIR / server.ARCHIVE_DIRNAME / "Demo"
+    assert archived.exists()
+    assert (archived / "Demo - Router.md").exists()
+    assert "Demo" not in server.list_projects()
+    assert "Archived" in result
+
+
+def test_archive_project_removes_home_link(server):
+    server.install_project("Demo")
+    assert "[[Projects/Demo/Demo - Router|Demo]]" in server._read(server.HOME_FILE)
+
+    server.archive_project("Demo")
+
+    assert "[[Projects/Demo/Demo - Router|Demo]]" not in server._read(server.HOME_FILE)
+
+
+def test_archive_project_raises_if_not_installed(server):
+    with pytest.raises(ValueError):
+        server.archive_project("DoesNotExist")
+
+
+def test_archive_project_raises_if_already_archived(server):
+    server.install_project("Demo")
+    server.archive_project("Demo")
+    server.install_project("Demo")
+
+    with pytest.raises(ValueError):
+        server.archive_project("Demo")
+
+
+def test_archived_project_excluded_from_search_and_activity(server):
+    server.install_project("Demo")
+    server.log_decision("Demo", "Some decision", "context", "decision", "why")
+    server.archive_project("Demo")
+
+    assert server.search_all("decision") == []
+    assert server.recent_activity(days=7) == []
+
+
+def test_project_name_cannot_be_reserved_archive_name(server):
+    with pytest.raises(ValueError):
+        server.install_project("_Archive")
